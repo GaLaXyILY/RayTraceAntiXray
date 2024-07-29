@@ -1,0 +1,47 @@
+name: CI
+on:
+  workflow_dispatch:  
+    inputs:  
+      logLevel:  
+        description: 'Log level'  
+        required: true  
+        default: 'warning'
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: "Test on JDK ${{ matrix.java }}"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [ 17 ]
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+      - name: "Set up JDK ${{ matrix.java }}"
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: temurin
+          cache: maven
+      - name: Install depends 
+        run: |
+          mvn clean package -DskipTests
+        env:
+         MAVEN_OPTS: -Xmx2048m --illegal-access=permit
+      - run: mkdir staging && cp target/*.jar staging 
+      - name: Set Release version env variable 
+        run: | 
+         echo "RELEASE_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV 
+      - name: "Build & test" 
+        run: | 
+         echo "done!" 
+      - uses: "marvinpinto/action-automatic-releases@latest" 
+        with: 
+         repo_token: "${{ secrets.GITHUB_TOKEN }}" 
+         automatic_release_tag: "${{ env.RELEASE_VERSION }}" 
+         prerelease: false 
+         title: "Release ${{ env.RELEASE_VERSION }}" 
+         files: | 
+           staging/*.jar
